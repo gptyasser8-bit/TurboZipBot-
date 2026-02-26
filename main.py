@@ -2,7 +2,6 @@ import os
 import lzma
 import zipfile
 import threading
-import time
 import asyncio
 from flask import Flask
 from pyrogram import Client, filters
@@ -11,7 +10,7 @@ from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 # --- 1. خادم الويب (بورت 7860) ---
 web_app = Flask(__name__)
 @web_app.route('/')
-def home(): return "System Online - Developed by @Y_SH95"
+def home(): return "Extreme Compressor Online - By @Y_SH95"
 
 def run_web():
     port = int(os.environ.get("PORT", 7860))
@@ -35,21 +34,24 @@ async def progress_bar(current, total, message, text):
             await message.edit_text(f"⚙️ {text}\n\n📊 التقدم: {percent:.1f}%\n[{bar}]\n\n🛡 {RIGHTS}")
     except: pass
 
-# --- 4. محرك الضغط ---
+# --- 4. محرك الضغط الذكي (نظام القطع Chunks) ---
 def compress_engine(input_file, output_file, mode, level=None):
     if mode == "xz":
-        # ضغط XZ فائق ثابت
-        my_filters = [{"id": lzma.FILTER_LZMA2, "preset": 9 | lzma.PRESET_EXTREME}]
+        # استخدام preset 6 لضمان أقصى ضغط مستقر دون تعليق السيرفر
+        my_filters = [{"id": lzma.FILTER_LZMA2, "preset": 6}]
         with lzma.open(output_file, "wb", filters=my_filters) as f_out:
             with open(input_file, "rb") as f_in:
-                while chunk := f_in.read(1024*1024): f_out.write(chunk)
+                # معالجة الملف قطعة قطعة (Chunking) لمنع الانهيار
+                while True:
+                    chunk = f_in.read(1024 * 1024) # 1MB بكل مرة
+                    if not chunk: break
+                    f_out.write(chunk)
     else:
-        # ضغط ZIP مع مستويات مختلفة
-        # level: 1 (أسرع/أقل ضغط) إلى 9 (أبطأ/أفضل ضغط)
+        # ضغط ZIP بالمستوى المطلوب
         with zipfile.ZipFile(output_file, 'w', compression=zipfile.ZIP_DEFLATED, compresslevel=level) as zipf:
             zipf.write(input_file, arcname=os.path.basename(input_file))
 
-# --- 5. الرسالة الترحيبية المعدلة ---
+# --- 5. الأوامر والترحيب ---
 @app.on_message(filters.command("start"))
 async def start_command(client, message):
     welcome_msg = (
@@ -72,9 +74,9 @@ async def handle_file(client, message):
         [InlineKeyboardButton("⚡ ضغط بصيغة ZIP", callback_data="ask_zip")],
         [InlineKeyboardButton("💎 عصر فائق بصيغة XZ", callback_data="type_xz")]
     ])
-    await msg.edit_text(f"✅ تم تحميل: `{os.path.basename(path)}`\n\nاختر طريقة الضغط المفضلة لديك:", reply_markup=kb)
+    await msg.edit_text(f"✅ تم تحميل: `{os.path.basename(path)}`\n\nاختر طريقة الضغط:", reply_markup=kb)
 
-# --- 7. معالجة الأزرار (القوائم الفرعية والضغط) ---
+# --- 7. معالجة الضغط ---
 @app.on_callback_query()
 async def on_callback(client, callback):
     data = callback.data
@@ -82,57 +84,48 @@ async def on_callback(client, callback):
     input_p = user_data.get(user_id)
 
     if not input_p or not os.path.exists(input_p):
-        await callback.answer("❌ الملف غير موجود، أرسله مجدداً!", show_alert=True)
+        await callback.answer("❌ الملف غير موجود!", show_alert=True)
         return
 
-    # خيار اختيار مستويات ZIP
     if data == "ask_zip":
         kb = InlineKeyboardMarkup([
-            [InlineKeyboardButton("🚀 سريع (مستوى 1)", callback_data="zip_1")],
-            [InlineKeyboardButton("⚖️ متوازن (مستوى 6)", callback_data="zip_6")],
-            [InlineKeyboardButton("🔥 أقصى ضغط (مستوى 9)", callback_data="zip_9")],
-            [InlineKeyboardButton("🔙 العودة", callback_data="back")]
+            [InlineKeyboardButton("🚀 سريع (Lvl 1)", callback_data="zip_1")],
+            [InlineKeyboardButton("⚖️ متوازن (Lvl 6)", callback_data="zip_6")],
+            [InlineKeyboardButton("🔥 أقصى ضغط (Lvl 9)", callback_data="zip_9")]
         ])
-        await callback.message.edit_text("اختر مستوى قوة ضغط ZIP:", reply_markup=kb)
+        await callback.message.edit_text("اختر مستوى قوة ZIP:", reply_markup=kb)
         return
 
-    # العودة للقائمة الرئيسية
-    if data == "back":
-        kb = InlineKeyboardMarkup([
-            [InlineKeyboardButton("⚡ ضغط بصيغة ZIP", callback_data="ask_zip")],
-            [InlineKeyboardButton("💎 عصر فائق بصيغة XZ", callback_data="type_xz")]
-        ])
-        await callback.message.edit_text("اختر طريقة الضغط المفضلة لديك:", reply_markup=kb)
-        return
-
-    # بدء عملية الضغط الفعلي
     mode = "xz" if data == "type_xz" else "zip"
-    level = int(data.split("_")[1]) if mode == "zip" else 9
+    level = int(data.split("_")[1]) if mode == "zip" else 6
     output_p = f"{input_p}.{mode}"
     
-    await callback.message.edit_text(f"🚀 جاري المعالجة ({mode.upper()})... انتظر المعجزة!")
+    await callback.message.edit_text(f"🚀 جاري العصر بتقنية {mode.upper()}...\n(يرجى الانتظار، جاري العمل بأقصى قوة)")
+    
     size_before = os.path.getsize(input_p) / (1024*1024)
 
     try:
+        # تنفيذ الضغط في خيط مستقل
         await asyncio.to_thread(compress_engine, input_p, output_p, mode, level)
+        
         size_after = os.path.getsize(output_p) / (1024*1024)
         ratio = (1 - (size_after / size_before)) * 100
 
-        await callback.message.edit_text("📤 تم سحق الملف! جاري الرفع الآن...")
+        await callback.message.edit_text("📤 اكتمل العصر! جاري الرفع...")
         
         await client.send_document(
             chat_id=callback.message.chat.id, 
             document=output_p,
             caption=(
                 f"✅ **تم الضغط بنجاح!**\n\n"
-                f"📂 **النوع:** {mode.upper()} {'(Lvl '+str(level)+')' if mode=='zip' else ''}\n"
+                f"📂 **النوع:** {mode.upper()}\n"
                 f"📉 **قبل:** {size_before:.2f} MB\n"
                 f"📈 **بعد:** {size_after:.2f} MB\n"
                 f"🔥 **نسبة السحق:** {ratio:.1f}%\n\n"
                 f"🛡 {RIGHTS}"
             ),
             progress=progress_bar,
-            progress_args=(callback.message, "جاري الرفع إلى تلجرام...")
+            progress_args=(callback.message, "جاري الرفع...")
         )
     except Exception as e:
         await callback.message.edit_text(f"❌ حدث خطأ: {e}")

@@ -22,9 +22,11 @@ def home():
     return "Bot is running perfectly!"
 
 def run_flask():
-    # Render يمرر البوت عبر متغير PORT تلقائياً
+    # Render يرسل رقم البورت عبر متغير بيئة اسمه PORT
+    # إذا لم يجده (مثل التجربة المحلية) سيستخدم 8080
     port = int(os.environ.get("PORT", 8080))
     web_server.run(host='0.0.0.0', port=port)
+
 
 # --- دالة الضغط الذكية ---
 def compress_logic(input_path, output_path, mode):
